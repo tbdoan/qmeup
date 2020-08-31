@@ -1,0 +1,27 @@
+{
+  "name": "qmeup",
+  "version": "1.0.0",
+  "description": "queue spotify songs by text",
+  "main": "index.js",
+  "dependencies": {
+    "lodash": "^4.17.20",
+    "twilio": "^3.49.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tbdoan/qmeup.git"
+  },
+  "keywords": [
+    "spotify"
+  ],
+  "author": "tung and vaibhavi",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/tbdoan/qmeup/issues"
+  },
+  "homepage": "https://github.com/tbdoan/qmeup#readme"
+}
