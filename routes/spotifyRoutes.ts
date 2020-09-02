@@ -68,23 +68,26 @@ router.get('/callback', function (req, res) {
       if (!error && response.statusCode === 200) {
         access_token = body.access_token;
         refresh_token = body.refresh_token;
+        
         console.table({
           accessToken: access_token,
           refreshToken: refresh_token,
         });
-        querystring.stringify({
-          uri:
-            'spotify:track:27Y1N4Q4U3EfDU5Ubw8ws2?context=spotify%3Aplaylist%3A37i9dQZF1DX5CdVP4rz81C',
-        });
         const options = {
-          url: 'https://api.spotify.com/v1/me/player/queue',
-          headers: { Authorization: 'Bearer ' + access_token },
-          json: true,
+          url:
+            'https://api.spotify.com/v1/me/player/queue?uri=spotify%3Atrack%3A3a1lNhkSLSkpJE4MSHpDu9',
+          headers: {
+            Authorization: 'Bearer ' + access_token,
+            'Content-Length': 0,
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+          },
+          //json: true,
         };
 
         // use the access token to access the Spotify Web API
-        request.get(options, function (error, response, body) {
-          console.log(body);
+        request.post(options, function (error, response, body) {
+          console.log(response);
         });
 
         // we can also pass the token to the browser to make requests from there
