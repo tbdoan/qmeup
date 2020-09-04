@@ -21,12 +21,12 @@ router.use(bodyParser.urlencoded({ extended: false })).use(session({
 }));
 router.post('/sms', (req, res) => {
     const twiml = new MessagingResponse();
+    let sent = false;
     //TODO: use this later to create welcome message
     // const smsCount = req.session.counter || 0;
     const body = req.body.Body;
     //good indication that a person is sending in a track
     if (body.includes('spotify') && body.includes('track')) {
-        console.log('if');
         let [roomCode, spotifyURI] = body.split(' ');
         roomCode = roomCode.toUpperCase();
         if (spotifyURI.includes('https:')) {
@@ -35,10 +35,12 @@ router.post('/sms', (req, res) => {
             spotifyURI = 'spotify:track:' + spotifyURI;
         }
         const ref = firebaseConfig_1.db.ref(`rooms/${roomCode}`);
-        ref.on('value', function (snapshot) {
-            console.log(snapshot.val());
-            if (snapshot.val() == null) {
-                //TODO: send error message
+        ref.once('value', function (snapshot) {
+            if (snapshot.val() === null) {
+                twiml.message("Sorry, looks like that's an invalid room code");
+                res.writeHead(200, { 'Content-Type': 'text/xml' });
+                res.end(twiml.toString());
+                sent = true;
             }
             else {
                 const accessToken = snapshot.val().accessToken;
@@ -53,21 +55,32 @@ router.post('/sms', (req, res) => {
                 };
                 // use the access token to access the Spotify Web API
                 request.post(options, function (error, response, body) {
-                    console.log(options.url);
-                    console.log(response.statusCode);
+                    if (response.statusCode === 204) {
+                        twiml.message('Added to queue!');
+                        res.writeHead(200, { 'Content-Type': 'text/xml' });
+                        res.end(twiml.toString());
+                        sent = true;
+                    }
                 });
             }
         }, function (errorObject) {
-            console.log('The read failed: ' + errorObject.code);
+            // failed firebase read
+            console.log('The read failed: ' + errorObject.toString());
         });
+        setTimeout(() => {
+            if (!sent) {
+                twiml.message("Internal Error: Something's broken");
+                res.writeHead(200, { 'Content-Type': 'text/xml' });
+                res.end(twiml.toString());
+            }
+        }, 2000);
     }
     else {
-        console.log('else');
         // prompt them to create a room
         // Access the message body and the number it was sent from.
         twiml.message('To create a room, sign in with Spotify here: http://localhost:8080/login/?' +
             querystring.stringify({ phoneNumber: req.body.From }));
+        res.writeHead(200, { 'Content-Type': 'text/xml' });
+        res.end(twiml.toString());
     }
-    res.writeHead(200, { 'Content-Type': 'text/xml' });
-    res.end(twiml.toString());
 });
