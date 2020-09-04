@@ -3,6 +3,7 @@ import bodyParser = require('body-parser');
 import session = require('express-session');
 import querystring = require('querystring');
 import axios from 'axios';
+import request = require('request');
 const MessagingResponse = require('twilio').twiml.MessagingResponse;
 import { db } from '../functions/firebaseConfig';
 require('dotenv/config');
@@ -39,7 +40,7 @@ router.post('/sms', (req, res) => {
       spotifyURI = 'spotify:track:' + spotifyURI;
     }
     const ref = db.ref(`rooms/${roomCode}`);
-    ref.once(
+    ref.on(
       'value',
       function (snapshot) {
         if (snapshot.val() === null) {
@@ -49,6 +50,7 @@ router.post('/sms', (req, res) => {
           sent = true;
         } else {
           const accessToken = snapshot.val().accessToken;
+          const refreshToken = snapshot.val().refreshToken;
           const headersObject = {
             headers: {
               Authorization: 'Bearer ' + accessToken,
@@ -73,9 +75,36 @@ router.post('/sms', (req, res) => {
               }
             })
             .catch((err) => {
-              console.log(err.response.statusText);
               if (err.response.statusText === 'Unauthorized') {
-                //TODO: use refresh token, get
+                // requesting access token from refresh token
+                let refresh_token = refreshToken;
+                const authOptions = {
+                  url: 'https://accounts.spotify.com/api/token',
+                  headers: {
+                    Authorization:
+                      'Basic ' +
+                      Buffer.from(
+                        process.env.SPOTIFY_CLIENT_ID +
+                          ':' +
+                          process.env.SPOTIFY_CLIENT_SECRET
+                      ).toString('base64'),
+                  },
+                  form: {
+                    grant_type: 'refresh_token',
+                    refresh_token: refresh_token,
+                  },
+                  json: true,
+                };
+
+                request.post(authOptions, function (error, response, body) {
+                  if (!error && response.statusCode === 200) {
+                    db.ref(`rooms/${roomCode}/accessToken`)
+                      .set(body.access_token)
+                      .catch((err0r) => {
+                        console.log(err0r);
+                      });
+                  }
+                });
               }
             });
         }
