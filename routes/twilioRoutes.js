@@ -5,7 +5,7 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const session = require("express-session");
 const querystring = require("querystring");
-const request = require("request");
+const axios_1 = require("axios");
 const MessagingResponse = require('twilio').twiml.MessagingResponse;
 const firebaseConfig_1 = require("../functions/firebaseConfig");
 require('dotenv/config');
@@ -44,8 +44,7 @@ router.post('/sms', (req, res) => {
             }
             else {
                 const accessToken = snapshot.val().accessToken;
-                const options = {
-                    url: `https://api.spotify.com/v1/me/player/queue?uri=${spotifyURI}`,
+                const headersObject = {
                     headers: {
                         Authorization: 'Bearer ' + accessToken,
                         'Content-Length': 0,
@@ -53,13 +52,20 @@ router.post('/sms', (req, res) => {
                         'Content-Type': 'application/json',
                     },
                 };
-                // use the access token to access the Spotify Web API
-                request.post(options, function (error, response, body) {
-                    if (response.statusCode === 204) {
+                axios_1.default
+                    .post(`https://api.spotify.com/v1/me/player/queue?uri=${spotifyURI}`, {}, headersObject)
+                    .then((response) => {
+                    if (response.status === 204) {
                         twiml.message('Added to queue!');
                         res.writeHead(200, { 'Content-Type': 'text/xml' });
                         res.end(twiml.toString());
                         sent = true;
+                    }
+                })
+                    .catch((err) => {
+                    console.log(err.response.statusText);
+                    if (err.response.statusText === 'Unauthorized') {
+                        //TODO: use refresh token, get
                     }
                 });
             }

@@ -2,7 +2,7 @@ import express = require('express');
 import bodyParser = require('body-parser');
 import session = require('express-session');
 import querystring = require('querystring');
-import request = require('request');
+import axios from 'axios';
 const MessagingResponse = require('twilio').twiml.MessagingResponse;
 import { db } from '../functions/firebaseConfig';
 require('dotenv/config');
@@ -49,8 +49,7 @@ router.post('/sms', (req, res) => {
           sent = true;
         } else {
           const accessToken = snapshot.val().accessToken;
-          const options = {
-            url: `https://api.spotify.com/v1/me/player/queue?uri=${spotifyURI}`,
+          const headersObject = {
             headers: {
               Authorization: 'Bearer ' + accessToken,
               'Content-Length': 0,
@@ -59,15 +58,26 @@ router.post('/sms', (req, res) => {
             },
           };
 
-          // use the access token to access the Spotify Web API
-          request.post(options, function (error, response, body) {
-            if (response.statusCode === 204) {
-              twiml.message('Added to queue!');
-              res.writeHead(200, { 'Content-Type': 'text/xml' });
-              res.end(twiml.toString());
-              sent = true;
-            }
-          });
+          axios
+            .post(
+              `https://api.spotify.com/v1/me/player/queue?uri=${spotifyURI}`,
+              {},
+              headersObject
+            )
+            .then((response) => {
+              if (response.status === 204) {
+                twiml.message('Added to queue!');
+                res.writeHead(200, { 'Content-Type': 'text/xml' });
+                res.end(twiml.toString());
+                sent = true;
+              }
+            })
+            .catch((err) => {
+              console.log(err.response.statusText);
+              if (err.response.statusText === 'Unauthorized') {
+                //TODO: use refresh token, get
+              }
+            });
         }
       },
       function (errorObject) {
