@@ -10,15 +10,18 @@
   "author": "Tung",
   "license": "ISC",
   "dependencies": {
+    "@types/express-session": "^1.17.0",
     "cookie-parser": "^1.4.5",
     "cors": "^2.8.5",
     "dotenv": "^8.2.0",
     "express": "^4.17.1",
+    "express-session": "^1.17.1",
     "firebase": "^7.19.1",
     "firebase-admin": "^9.1.1",
     "nodemon": "^2.0.4",
     "querystring": "^0.2.0",
-    "request": "^2.88.2"
+    "request": "^2.88.2",
+    "twilio": "^3.49.1"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.2",

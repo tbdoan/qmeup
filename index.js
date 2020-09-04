@@ -5,15 +5,17 @@ const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const app = express();
 const spotifyRoutes_1 = require("./routes/spotifyRoutes");
+const twilioRoutes_1 = require("./routes/twilioRoutes");
 app
     .use(express.static(__dirname + '/public'))
     .use(cors())
     .use(cookieParser())
-    .use('/', spotifyRoutes_1.router);
+    .use('/', spotifyRoutes_1.router)
+    .use('/', twilioRoutes_1.router);
 app.get('/', (req, res) => {
-    res.send('Hello World!');
+    res.send('Success! You can close this now.');
 });
-const server = app.listen(8888, () => {
+const server = app.listen(8080, () => {
     const serverAddress = server.address();
     let host = '';
     let port = 0;

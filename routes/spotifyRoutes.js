@@ -5,11 +5,13 @@ const express = require("express");
 const request = require("request"); // "Request" library
 const querystring = require("querystring");
 const generateRandomString_js_1 = require("../functions/generateRandomString.js");
+const firebaseConfig_1 = require("../functions/firebaseConfig");
+const sendMessage_1 = require("../functions/sendMessage");
 require('dotenv/config');
 const stateKey = 'spotify_auth_state';
-const client_id = process.env.SPOTIFY_CLIENT_ID; // Your client id
-const client_secret = process.env.SPOTIFY_CLIENT_SECRET; // Your secret
-const redirect_uri = 'http://localhost:8888/callback'; // Your redirect uri
+const client_id = process.env.SPOTIFY_CLIENT_ID;
+const client_secret = process.env.SPOTIFY_CLIENT_SECRET;
+let redirect_uri = 'http://localhost:8080/callback';
 let access_token;
 let refresh_token;
 const router = express.Router();
@@ -17,6 +19,12 @@ exports.router = router;
 router.get('/login', function (req, res) {
     const state = generateRandomString_js_1.generateRandomString(16); //for keeping track of state
     res.cookie(stateKey, state);
+    res.cookie('phoneNumber', req.query.phoneNumber.toString());
+    // redirect_uri =
+    //   redirect_uri +
+    //   '?' +
+    //   querystring.stringify({ phoneNumber: req.query.phoneNumber.toString() });
+    // console.log(redirect_uri);
     // your application requests authorization
     const scope = 'user-modify-playback-state';
     res.redirect('https://accounts.spotify.com/authorize?' +
@@ -34,7 +42,8 @@ router.get('/callback', function (req, res) {
     const code = req.query.code || null;
     const state = req.query.state || null;
     const storedState = req.cookies ? req.cookies[stateKey] : null;
-    if (state === null || state !== storedState) {
+    const phoneNumber = req.cookies ? req.cookies['phoneNumber'] : null;
+    if (phoneNumber === null || state === null || state !== storedState) {
         res.redirect('/#' +
             querystring.stringify({
                 error: 'state_mismatch',
@@ -55,27 +64,25 @@ router.get('/callback', function (req, res) {
             },
             json: true,
         };
+        // gets the tokens at 'https://accounts.spotify.com/api/token'
         request.post(authOptions, function (error, response, body) {
+            let roomCode;
             if (!error && response.statusCode === 200) {
-                access_token = body.access_token;
-                refresh_token = body.refresh_token;
-                console.table({
-                    accessToken: access_token,
-                    refreshToken: refresh_token,
-                });
-                const options = {
-                    url: 'https://api.spotify.com/v1/me/player/queue?uri=spotify%3Atrack%3A3a1lNhkSLSkpJE4MSHpDu9',
-                    headers: {
-                        Authorization: 'Bearer ' + access_token,
-                        'Content-Length': 0,
-                        Accept: 'application/json',
-                        'Content-Type': 'application/json',
-                    },
-                };
-                // use the access token to access the Spotify Web API
-                request.post(options, function (error, response, body) {
-                    console.log(response);
-                });
+                while (true) {
+                    try {
+                        roomCode = generateRandomString_js_1.generateRandomString(4).toUpperCase();
+                        firebaseConfig_1.db.ref(`/rooms/${roomCode}`).set({
+                            phoneNumber: phoneNumber,
+                            accessToken: body.access_token,
+                            refreshToken: body.refresh_token,
+                        });
+                        break;
+                    }
+                    catch (err) {
+                        continue;
+                    }
+                }
+                sendMessage_1.sendMessage(`Your room code is ${roomCode}`, phoneNumber);
                 // we can also pass the token to the browser to make requests from there
                 res.redirect('/#' +
                     querystring.stringify({
