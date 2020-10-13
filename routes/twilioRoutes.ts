@@ -6,17 +6,17 @@ import axios from 'axios';
 import request = require('request');
 const MessagingResponse = require('twilio').twiml.MessagingResponse;
 import { db } from '../functions/firebaseConfig';
+import { processSpotifyLink } from '../functions/functions';
 require('dotenv/config');
 
-//TODO: implement this later
-// const welcomeMessage =
-//   'Welcome! Text "room" to create a new room or text a roomcode followed by a Spotify URI to queue up a song.';
+const welcomeMessage =
+  'If you are a host, text "room" to find your current room code, or "new" to create a new room (warning: this will delete your old room). \n If you are a guest, text a room code followed by a Spotify link to queue up a song.';
 
 const router = express.Router();
 router.use(bodyParser.urlencoded({ extended: false })).use(
   session({
     secret: 'anything-you-want-but-keep-secret',
-    resave: true, //TODO: mess with these two values if cookies aren't working
+    resave: true,
     saveUninitialized: false,
   })
 );
@@ -24,27 +24,24 @@ router.use(bodyParser.urlencoded({ extended: false })).use(
 router.post('/sms', (req, res) => {
   const twiml = new MessagingResponse();
   let sent = false;
+  //will send a timeout if five seconds passes before a response
+  setTimeout(() => {
+    if (!sent) {
+      twiml.message("Internal Error: Something's broken");
+      res.writeHead(200, { 'Content-Type': 'text/xml' });
+      res.end(twiml.toString());
+    }
+  }, 5000);
   //TODO: use this later to create welcome message
   // const smsCount = req.session.counter || 0;
   const body: string = req.body.Body;
-  //good indication that a person is sending in a track
-  if (body.includes('spotify') && body.includes('track')) {
-    let [roomCode, spotifyURI] = body.split(' ');
-    roomCode = roomCode.toUpperCase();
-    if (spotifyURI.includes('https:')) {
-      // converts the spotify link to uri
-      spotifyURI = spotifyURI.substring(
-        spotifyURI.lastIndexOf('/') + 1,
-        spotifyURI.lastIndexOf('?')
-      );
-      spotifyURI = 'spotify:track:' + spotifyURI;
-    }
-    const ref = db.ref(`rooms/${roomCode}`);
-    ref.on(
+  let [roomCode, spotifyURI] = processSpotifyLink(body);
+  if (roomCode !== null && spotifyURI !== null) {
+    db.ref(`rooms/${roomCode}`).on(
       'value',
       function (snapshot) {
         if (snapshot.val() === null) {
-          twiml.message("Sorry, looks like that's an invalid room code");
+          twiml.message("Sorry, looks like that's an invalid room code.");
           res.writeHead(200, { 'Content-Type': 'text/xml' });
           res.end(twiml.toString());
           sent = true;
@@ -59,7 +56,6 @@ router.post('/sms', (req, res) => {
               'Content-Type': 'application/json',
             },
           };
-
           axios
             .post(
               `https://api.spotify.com/v1/me/player/queue?uri=${spotifyURI}`,
@@ -75,9 +71,15 @@ router.post('/sms', (req, res) => {
               }
             })
             .catch((err) => {
-              if (err.response.statusText === 'Unauthorized') {
+              console.table([err.response.status, err.response.statusText]);
+              if (err.response.status === 404) {
+                twiml.message('Host is not playing music now');
+                res.writeHead(200, { 'Content-Type': 'text/xml' });
+                res.end(twiml.toString());
+                sent = true;
+              } else if (err.response.statusText === 'Unauthorized') {
+                //timed out
                 // requesting access token from refresh token
-                let refresh_token = refreshToken;
                 const authOptions = {
                   url: 'https://accounts.spotify.com/api/token',
                   headers: {
@@ -91,11 +93,10 @@ router.post('/sms', (req, res) => {
                   },
                   form: {
                     grant_type: 'refresh_token',
-                    refresh_token: refresh_token,
+                    refresh_token: refreshToken,
                   },
                   json: true,
                 };
-
                 request.post(authOptions, function (error, response, body) {
                   if (!error && response.statusCode === 200) {
                     db.ref(`rooms/${roomCode}/accessToken`)
@@ -114,22 +115,45 @@ router.post('/sms', (req, res) => {
         console.log('The read failed: ' + errorObject.toString());
       }
     );
-    setTimeout(() => {
-      if (!sent) {
-        twiml.message("Internal Error: Something's broken");
+  } else if (body.toLowerCase() === 'new') {
+    db.ref(`/phoneNumbers/${req.body.From}`).once('value', function (snapshot) {
+      if (snapshot.val() !== null) {
+        const roomToDelete = snapshot.val().roomCode;
+        db.ref(`/rooms/${roomToDelete}`).set(null);
+        db.ref(`/phoneNumbers/${req.body.From}`).set(null);
+      }
+      twiml.message(
+        'To create a room, sign in with Spotify here: https://spotify-express-login.wl.r.appspot.com/login/?' +
+          querystring.stringify({ phoneNumber: req.body.From })
+      );
+      res.writeHead(200, { 'Content-Type': 'text/xml' });
+      res.end(twiml.toString());
+      sent = true;
+    });
+  } else if (body.toLowerCase() === 'room') {
+    db.ref(`/phoneNumbers/${req.body.From}`).once('value', function (snapshot) {
+      if (snapshot.val() === null) {
+        twiml.message(
+          'To create a room, sign in with Spotify here: https://spotify-express-login.wl.r.appspot.com/login/?' +
+            querystring.stringify({ phoneNumber: req.body.From })
+        );
         res.writeHead(200, { 'Content-Type': 'text/xml' });
         res.end(twiml.toString());
+        sent = true;
+      } else {
+        twiml.message(`Your active room code is ${snapshot.val().roomCode}`);
+        res.writeHead(200, { 'Content-Type': 'text/xml' });
+        res.end(twiml.toString());
+        sent = true;
       }
-    }, 2000);
+    });
   } else {
     // prompt them to create a room
     // Access the message body and the number it was sent from.
-    twiml.message(
-      'To create a room, sign in with Spotify here: http://localhost:8080/login/?' +
-        querystring.stringify({ phoneNumber: req.body.From })
-    );
+    twiml.message(welcomeMessage);
     res.writeHead(200, { 'Content-Type': 'text/xml' });
     res.end(twiml.toString());
+    sent = true;
   }
 });
 

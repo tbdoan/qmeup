@@ -4,28 +4,22 @@ exports.router = void 0;
 const express = require("express");
 const request = require("request"); // "Request" library
 const querystring = require("querystring");
-const generateRandomString_js_1 = require("../functions/generateRandomString.js");
+const functions_js_1 = require("../functions/functions.js");
 const firebaseConfig_1 = require("../functions/firebaseConfig");
-const sendMessage_1 = require("../functions/sendMessage");
+const twilioFunctions_1 = require("../functions/twilioFunctions");
 require('dotenv/config');
 const stateKey = 'spotify_auth_state';
 const client_id = process.env.SPOTIFY_CLIENT_ID;
 const client_secret = process.env.SPOTIFY_CLIENT_SECRET;
-let redirect_uri = 'http://localhost:8080/callback';
+let redirect_uri = 'https://spotify-express-login.wl.r.appspot.com/callback';
 let access_token;
 let refresh_token;
 const router = express.Router();
 exports.router = router;
 router.get('/login', function (req, res) {
-    const state = generateRandomString_js_1.generateRandomString(16); //for keeping track of state
+    const state = functions_js_1.generateRandomString(16); //for keeping track of state
     res.cookie(stateKey, state);
     res.cookie('phoneNumber', req.query.phoneNumber.toString());
-    // redirect_uri =
-    //   redirect_uri +
-    //   '?' +
-    //   querystring.stringify({ phoneNumber: req.query.phoneNumber.toString() });
-    // console.log(redirect_uri);
-    // your application requests authorization
     const scope = 'user-modify-playback-state';
     res.redirect('https://accounts.spotify.com/authorize?' +
         querystring.stringify({
@@ -70,11 +64,13 @@ router.get('/callback', function (req, res) {
             if (!error && response.statusCode === 200) {
                 while (true) {
                     try {
-                        roomCode = generateRandomString_js_1.generateRandomString(4).toUpperCase();
+                        roomCode = functions_js_1.generateRandomString(4).toUpperCase();
                         firebaseConfig_1.db.ref(`/rooms/${roomCode}`).set({
-                            phoneNumber: phoneNumber,
                             accessToken: body.access_token,
                             refreshToken: body.refresh_token,
+                        });
+                        firebaseConfig_1.db.ref(`/phoneNumbers/${phoneNumber}`).set({
+                            roomCode: roomCode,
                         });
                         break;
                     }
@@ -82,7 +78,7 @@ router.get('/callback', function (req, res) {
                         continue;
                     }
                 }
-                sendMessage_1.sendMessage(`Your room code is ${roomCode}`, phoneNumber);
+                twilioFunctions_1.sendMessage(`Your room code is ${roomCode}`, phoneNumber);
                 // we can also pass the token to the browser to make requests from there
                 res.redirect('/#' +
                     querystring.stringify({

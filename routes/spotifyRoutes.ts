@@ -1,15 +1,15 @@
 import express = require('express');
 import request = require('request'); // "Request" library
 import querystring = require('querystring');
-import { generateRandomString } from '../functions/generateRandomString.js';
+import { generateRandomString } from '../functions/functions.js';
 import { db } from '../functions/firebaseConfig';
-import { sendMessage } from '../functions/sendMessage';
+import { sendMessage } from '../functions/twilioFunctions';
 
 require('dotenv/config');
 const stateKey = 'spotify_auth_state';
 const client_id = process.env.SPOTIFY_CLIENT_ID;
 const client_secret = process.env.SPOTIFY_CLIENT_SECRET;
-let redirect_uri = 'http://localhost:8080/callback';
+let redirect_uri = 'https://spotify-express-login.wl.r.appspot.com/callback';
 
 let access_token: string;
 let refresh_token: string;
@@ -20,12 +20,6 @@ router.get('/login', function (req, res) {
   const state = generateRandomString(16); //for keeping track of state
   res.cookie(stateKey, state);
   res.cookie('phoneNumber', req.query.phoneNumber.toString());
-  // redirect_uri =
-  //   redirect_uri +
-  //   '?' +
-  //   querystring.stringify({ phoneNumber: req.query.phoneNumber.toString() });
-  // console.log(redirect_uri);
-  // your application requests authorization
   const scope = 'user-modify-playback-state';
   res.redirect(
     'https://accounts.spotify.com/authorize?' +
@@ -79,9 +73,11 @@ router.get('/callback', function (req, res) {
           try {
             roomCode = generateRandomString(4).toUpperCase();
             db.ref(`/rooms/${roomCode}`).set({
-              phoneNumber: phoneNumber,
               accessToken: body.access_token,
               refreshToken: body.refresh_token,
+            });
+            db.ref(`/phoneNumbers/${phoneNumber}`).set({
+              roomCode: roomCode,
             });
             break;
           } catch (err) {
